@@ -12,9 +12,8 @@ ailments_filepath = f'{vault}/terrawhisper/encyclopedia/csvs/ailments-todo.txt'
 with open(ailments_filepath) as f: content = f.read()
 
 systems_organs_ailments_filepath = f'{vault}/terrawhisper/encyclopedia/csvs/systems-organs-ailments.csv'
-systems = csv_read_rows(f'{vault}/terrawhisper/database/systems.csv')[1:]
-systems = [system[0] for system in systems]
-systems = '- ' + '\n- '.join(systems)
+systems = csv_read_rows(f'{vault}/terrawhisper/database/systems.csv')
+systems = '- ' + '- '.join(systems)
 
 n_tries = 100
 for ailment_name in content.split('\n'):
@@ -39,19 +38,9 @@ for ailment_name in content.split('\n'):
 
     if not found:
         prompt = f'''
-            Select the body system and body part most relevant to the following ailment: {ailment_name}.
-            The possible of body systems you can select from are: 
-            - circulatory
-            - digestive
-            - endocrine
-            - integumentary
-            - lymphatic
-            - muscular
-            - nervous
-            - reproductive
-            - respiratory
-            - skeletal
-            - urinary
+            Write the body system and body part most relevant to the following ailment: {ailment_name}.
+            The possible of body systems are: 
+            {systems}
             Example of body part is: heart, leg, brain, etc.
             Reply with the following JSON format: 
             {{
@@ -60,7 +49,6 @@ for ailment_name in content.split('\n'):
             }}
             Reply only with the json, don't add additional information.
         '''
-        print(prompt)
         systems = []
         parts = []
         for i in range(n_tries):

@@ -7,8 +7,8 @@ from diffusers import DPMSolverMultistepScheduler
 
 from PIL import Image, ImageDraw, ImageFont
 
-from oliark import file_read
-from oliark import json_read
+from oliark_io import file_read
+from oliark_io import json_read
 from oliark_img import img_resize
 from oliark_llm import llm_reply
 
@@ -469,9 +469,9 @@ def draw_page_herbs(ailment_filepath, page_i, regen=False):
     if 0:
         for i in range(row_num * line_num + 1):
             x1 = text_area_x1
-            y1 = text_area_y1 + line_h*i
+            y1 = text_area_y1 + line_h*i*line_spacing
             x2 = text_area_x2
-            y2 = text_area_y1 + line_h*i
+            y2 = text_area_y1 + line_h*i*line_spacing
             draw.line((x1, y1, x2, y2), fill='#00ff00', width=4)
         for i in range(col_num + 1):
             x1 = text_area_x1 + col_w*i
@@ -482,13 +482,11 @@ def draw_page_herbs(ailment_filepath, page_i, regen=False):
             draw.line((x1-col_gap, y1, x2-col_gap, y2), fill='#00ffff', width=4)
         for i in range(row_num + 1):
             x1 = text_area_x1
-            y1 = text_area_y1 + row_h*i
+            y1 = text_area_y1 + row_h*i*lien_spacing
             x2 = text_area_x2
-            y2 = text_area_y1 + row_h*i
+            y2 = text_area_y1 + row_h*i*lien_spacing
             draw.line((x1, y1, x2, y2), fill='#00ffff', width=4)
             draw.line((x1, y1-row_gap, x2, y2-row_gap), fill='#00ffff', width=4)
-        '''
-        '''
         draw.line((text_area_x1, text_area_y1, text_area_x1, text_area_y2), fill='#ff0000', width=4)
         draw.line((text_area_x2, text_area_y1, text_area_x2, text_area_y2), fill='#ff0000', width=4)
         draw.line((text_area_x1, text_area_y1, text_area_x2, text_area_y1), fill='#ff0000', width=4)
@@ -701,9 +699,255 @@ def draw_ailment_plants_images(json_filepath, page_i):
             image = pipe(prompt=prompt, num_inference_steps=25).images[0]
             image.save(plant_image_filepath_out)
 
-## gen images
+def draw_page(ailment_filepath, page_i, side, regen=False):
+    ailment_slug = json_filepath.split('/')[-1].split('.')[0]
+    ailment_name = ailment_slug.replace('-', ' ')
+    print(ailment_name)
+
+    image_filepath_out = f'output/{page_i}-{ailment_slug}.jpg'
+
+    if not regen:
+        if os.path.exists(image_filepath_out): 
+            return
+
+    data = json_read(ailment_filepath)
+
+    img = Image.new('RGB', (a4_w, a4_h), color='white')
+    draw = ImageDraw.Draw(img)
+
+    p_mt = mt
+    p_mb = mb
+    if side == 'l':
+        p_ml = mi
+        p_mr = mo
+    else:
+        p_ml = mo
+        p_mr = mi
+
+    text_area_x1 = p_ml
+    text_area_y1 = p_mt
+    text_area_x2 = a4_w - p_mr
+    text_area_y2 = a4_h - p_mb
+    text_area_w = text_area_x2 - text_area_x1
+    text_area_h = text_area_y2 - text_area_y1
+
+    col_num = 2
+    col_w = text_area_w / col_num
+
+    row_num = 4
+    row_h = text_area_h / row_num
+
+    line_num = 13
+    line_spacing = 1.3
+    line_h = row_h / line_num
+
+    body_font_size = line_h / line_spacing
+    body_line_spacing = line_spacing
+
+    col_gap = line_h
+    row_gap = line_h
+
+    if 0:
+        for i in range(row_num * line_num + 1):
+            x1 = text_area_x1
+            y1 = text_area_y1 + line_h*i
+            x2 = text_area_x2
+            y2 = text_area_y1 + line_h*i
+            draw.line((x1, y1, x2, y2), fill='#00ff00', width=4)
+        for i in range(col_num + 1):
+            x1 = text_area_x1 + col_w*i
+            y1 = text_area_y1
+            x2 = text_area_x1 + col_w*i
+            y2 = text_area_y2
+            draw.line((x1, y1, x2, y2), fill='#00ffff', width=4)
+            draw.line((x1-col_gap, y1, x2-col_gap, y2), fill='#00ffff', width=4)
+        for i in range(row_num + 1):
+            x1 = text_area_x1
+            y1 = text_area_y1 + row_h*i
+            x2 = text_area_x2
+            y2 = text_area_y1 + row_h*i
+            draw.line((x1, y1, x2, y2), fill='#00ffff', width=4)
+            draw.line((x1, y1 - row_gap, x2, y2 - row_gap), fill='#00ffff', width=4)
+        draw.line((text_area_x1, text_area_y1, text_area_x1, text_area_y2), fill='#ff0000', width=4)
+        draw.line((text_area_x2, text_area_y1, text_area_x2, text_area_y2), fill='#ff0000', width=4)
+        draw.line((text_area_x1, text_area_y1, text_area_x2, text_area_y1), fill='#ff0000', width=4)
+        draw.line((text_area_x1, text_area_y2, text_area_x2, text_area_y2), fill='#ff0000', width=4)
+            
+    ## title
+    text = ailment_name.title()
+    font_size_mul = 1.8
+    font_size = body_font_size*font_size_mul
+    font = ImageFont.truetype(font_helvetica_bold_filepath, font_size)
+    lines = []
+    line_curr = ''
+    for word in text.split(' '):
+        _, _, word_w, word_h = font.getbbox(word)
+        _, _, line_curr_w, line_curr_h = font.getbbox(line_curr)
+        if line_curr_w + word_w < col_w - col_gap:
+            line_curr += f'{word} '
+        else:
+            lines.append(line_curr.strip())
+            line_curr = f'{word} '
+    lines.append(line_curr)
+    line_i = 0
+    for line in lines:
+        x_curr = text_area_x1
+        y_line = text_area_y1 + font_size*line_i*line_spacing
+        draw.text((x_curr, y_line), line, '#000000', font=font)
+        line_i += 1
+    y_curr = text_area_y1 + body_font_size*2*len(lines) + line_h
+
+    ## definition
+    text = data['definition']
+    font_size = body_font_size
+    font = ImageFont.truetype(font_helvetica_regular_filepath, font_size)
+    lines = []
+    line_curr = ''
+    for word in text.split(' '):
+        _, _, word_w, word_h = font.getbbox(word)
+        _, _, line_curr_w, line_curr_h = font.getbbox(line_curr)
+        if line_curr_w + word_w < col_w - col_gap:
+            line_curr += f'{word} '
+        else:
+            lines.append(line_curr.strip())
+            line_curr = f'{word} '
+    lines.append(line_curr)
+    line_height = 1.2
+    line_i = 0
+    for line in lines:
+        x_curr = text_area_x1
+        y_line = y_curr + body_font_size*line_i*line_spacing
+        draw.text((x_curr, y_line), line, '#000000', font=font)
+        line_i += 1
+    y_curr = text_area_y1
+
+    ## image
+    plant_name_scientific = data['plants'][0]['plant_name_scientific']
+    plant_slug = plant_name_scientific.lower().strip().replace(' ', '-')
+    plant_image_filepath_out = f'images/{page_i}-{ailment_slug}-{plant_slug}.jpg'
+    if not os.path.exists(plant_image_filepath_out): 
+        prompt = f'''
+            {plant_name_scientific},
+            outdoor,
+            natural light,
+            depth of field, bokeh, 
+            high resolution, cinematic
+        '''
+        image = pipe(prompt=prompt, num_inference_steps=25).images[0]
+        image.save(plant_image_filepath_out)
+    x1 = int(text_area_x1 + col_w*0)
+    y1 = int(text_area_y1 + row_h*1)
+    plant_img_w = int(col_w - col_gap)
+    plant_img_h = int(row_h - row_gap)
+    foreground = Image.open(plant_image_filepath_out)
+    foreground = img_resize(foreground, plant_img_w, plant_img_h)
+    img.paste(foreground, (x1, y1))
+
+    ## causes
+    x_start = text_area_x1 + col_w*0
+    y_start = text_area_y1 + row_h*2
+
+    y_curr = y_start
+    line = 'causes'.upper()
+    font_size = body_font_size
+    font = ImageFont.truetype(font_helvetica_bold_filepath, font_size)
+    draw.text((x_start, y_curr), line, '#000000', font=font)
+    y_curr += font_size
+    y_curr += line_h
+
+    objs = data['causes']
+    font_size = body_font_size
+    ellipse_size = 12
+    font = ImageFont.truetype(font_helvetica_regular_filepath, font_size)
+    i = 0
+    for obj in objs[:10]:
+        name = obj['name']
+        mentions = str(obj['mentions'])
+        x1 = x_start + 32
+        y1 = y_curr + line_h*i
+        x2 = x1 + ellipse_size
+        y2 = y1 + ellipse_size
+        draw.ellipse((x1, y1 + ellipse_size, x2, y2 + ellipse_size), fill='black')
+        draw.text((x1 + 32, y1), name.capitalize(), '#000000', font=font)
+        # _, _, mentions_w, _ = font.getbbox(mentions)
+        # draw.text((x1 + col_w - col_gap - mentions_w, y1), mentions, '#000000', font=font)
+        i += 1
+
+    ## symptoms
+    x_start = text_area_x1 + col_w*0
+    y_start = text_area_y1 + row_h*3
+
+    y_curr = y_start
+    line = 'symptoms'.upper()
+    font_size = body_font_size
+    font = ImageFont.truetype(font_helvetica_bold_filepath, font_size)
+    draw.text((x_start, y_curr), line, '#000000', font=font)
+    y_curr += font_size
+    y_curr += line_h
+
+    objs = data['symptoms']
+    font_size = body_font_size
+    ellipse_size = 12
+    font = ImageFont.truetype(font_helvetica_regular_filepath, font_size)
+    i = 0
+    for obj in objs[:10]:
+        name = obj['name']
+        mentions = str(obj['mentions'])
+        x1 = x_start + 32
+        y1 = y_curr + line_h*i
+        x2 = x1 + ellipse_size
+        y2 = y1 + ellipse_size
+        draw.ellipse((x1, y1 + ellipse_size, x2, y2 + ellipse_size), fill='black')
+        draw.text((x1 + 32, y1), name.capitalize(), '#000000', font=font)
+        # _, _, mentions_w, _ = font.getbbox(mentions)
+        # draw.text((x1 + col_w - col_gap - mentions_w, y1), mentions, '#000000', font=font)
+        i += 1
+
+    ## plants
+    x_start = text_area_x1 + col_w*1
+    y_start = text_area_y1 + row_h*0
+
+    y_curr = y_start
+    line = 'medicinal plants'.upper()
+    font_size = body_font_size
+    font = ImageFont.truetype(font_helvetica_bold_filepath, font_size)
+    draw.text((x_start, y_curr), line, '#000000', font=font)
+    y_curr += font_size
+    y_curr += line_h
+
+    objs = data['plants']
+    font_size = body_font_size
+    ellipse_size = 12
+    font = ImageFont.truetype(font_helvetica_regular_filepath, font_size)
+    i = 0
+    for obj in objs[:10]:
+        name = obj['plant_name_scientific']
+        mentions = str(obj['plant_mentions'])
+        x1 = x_start + 32
+        y1 = y_curr + line_h*i
+        x2 = x1 + ellipse_size
+        y2 = y1 + ellipse_size
+        draw.ellipse((x1, y1 + ellipse_size, x2, y2 + ellipse_size), fill='black')
+        draw.text((x1 + 32, y1), name, '#000000', font=font)
+        # _, _, mentions_w, _ = font.getbbox(mentions)
+        # draw.text((x1 + col_w - col_gap - mentions_w, y1), mentions, '#000000', font=font)
+        i += 1
+
+    ## page num
+    font_size = 32
+    line = str(page_i)
+    font = ImageFont.truetype(font_helvetica_regular_filepath, font_size)
+    _, _, line_w, _ = font.getbbox(line)
+    x1 = a4_w - 3*cell_size - line_w - cell_size//2
+    draw.text((x1, 40*cell_size), line, '#000000', font=font)
+
+    img.save(image_filepath_out)
+    img.show()
+    quit()
+
+
 if 0:
-    ## stable diffusion init
+    ## gen images
     checkpoint_filepath = '/home/ubuntu/vault/stable-diffusion/checkpoints/juggernautXL_juggXIByRundiffusion.safetensors'
     pipe = StableDiffusionXLPipeline.from_single_file(
         checkpoint_filepath, 
@@ -712,7 +956,6 @@ if 0:
         variant="fp16"
     ).to('cuda')
     pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-
     page_i = 0
     for filename in os.listdir(jsons_folderpath):
         json_filepath = f'{jsons_folderpath}/{filename}'
@@ -722,9 +965,8 @@ if 0:
         draw_ailment_image(json_filepath, page_i)
         # draw_ailment_plants_images(json_filepath, page_i+1)
         page_i += 1
-
-## gen texts
 else:
+    ## gen texts
     page_i = 0
     for filename in os.listdir(jsons_folderpath):
         json_filepath = f'{jsons_folderpath}/{filename}'
@@ -732,10 +974,14 @@ else:
         print(json_filepath)
         print('***********************')
 
-        draw_page_ailment(json_filepath, page_i, regen=True)
+        if page_i % 2 == 0:
+            side = 'r'
+        else:
+            side = 'l'
+        # draw_page_ailment(json_filepath, page_i, regen=True)
+        draw_page(json_filepath, page_i, side, regen=True)
         # draw_page_herbs(json_filepath, page_i+1, regen=True)
         # preview_full(json_filepath, page_i)
         page_i += 1
         # break
-
 

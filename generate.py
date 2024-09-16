@@ -6,36 +6,45 @@ import json
 import chromadb
 from chromadb.utils import embedding_functions
 
-from oliark import csv_read_rows_to_json, csv_read_rows
-from oliark import json_read, json_write
+from oliark_io import csv_read_rows_to_json, csv_read_rows
+from oliark_io import json_read, json_write
 from oliark_llm import llm_reply
 
 vault = '/home/ubuntu/vault'
-llms_path = f'{vault}/llms'
+vault_tmp = '/home/ubuntu/vault-tmp'
 
-model = f'{llms_path}/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf'
-model_validator_filepath = f'{llms_path}/Llama-3-Partonus-Lynx-8B-Intstruct-Q4_K_M.gguf'
+model = f'{vault_tmp}/llms/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf'
+model_validator_filepath = f'{vault_tmp}/llms/Llama-3-Partonus-Lynx-8B-Intstruct-Q4_K_M.gguf'
 
 proj_name = 'terrawhisper'
-db_path = f'{vault}/{proj_name}/database/{proj_name}'
 encyclopedia_folderpath = f'{vault}/{proj_name}/encyclopedia'
-jsons_100_folderpath = f'{vault}/{proj_name}/encyclopedia/jsons'
-jsons_1000_folderpath = f'{vault}/{proj_name}/encyclopedia/jsons-1000'
-jsons_folderpath = jsons_100_folderpath
+jsons_folderpath = f'{vault}/{proj_name}/encyclopedia/jsons'
 csvs_folderpath = f'{vault}/{proj_name}/csvs'
 
-ailments = csv_read_rows_to_json(f'{csvs_folderpath}/ailments.csv')
 ailments_folderpath = f'{encyclopedia_folderpath}/jsons'
 
+# plants = csv_read_rows_to_json(f'{vault}/terrawhisper/csvs/trefle.csv')
+plants = csv_read_rows_to_json(f'{vault_tmp}/terrawhisper/wcvp_taxon.csv', delimiter = '|')
+
 ## init croma
-chroma_client = chromadb.PersistentClient(path=db_path)
+db_path = f'{vault_tmp}/terrawhisper/chroma'
 sentence_transformer_ef = embedding_functions.SentenceTransformerEmbeddingFunction(
     model_name='all-mpnet-base-v2', 
     device='cuda',
 )
+chroma_client = chromadb.PersistentClient(path=db_path)
 
-# plants = csv_read_rows_to_json(f'{vault}/terrawhisper/csvs/trefle.csv')
-plants = csv_read_rows_to_json(f'{vault}/wcvp_dwca/wcvp_taxon.csv', delimiter = '|')
+def retrieve_docs(query):
+    collection_name = 'medicinal-plants'
+    collection = chroma_client.get_or_create_collection(
+        name=collection_name, 
+        embedding_function=sentence_transformer_ef,
+    )
+    n_results = 100
+    results = collection.query(query_texts=[query], n_results=n_results)
+    documents = results['documents'][0]
+    metadatas = results['metadatas'][0]
+    return documents, metadatas
 
 
 def validate_names_scientific(reply):
@@ -89,18 +98,6 @@ def llm_validate(question, context, answer):
     reply = llm_reply(prompt, model_validator_filepath, max_tokens=256)
     return reply
 
-
-def retrieve_docs(query):
-    collection_name = 'medicinal-plants'
-    collection = chroma_client.get_or_create_collection(
-        name=collection_name, 
-        embedding_function=sentence_transformer_ef,
-    )
-    n_results = 100
-    results = collection.query(query_texts=[query], n_results=n_results)
-    documents = results['documents'][0]
-    metadatas = results['metadatas'][0]
-    return documents, metadatas
 
 
 ########################################################################
@@ -280,7 +277,8 @@ for ailment_i, ailment_row in enumerate(ailments_rows[1:]):
         json_write(ailment_filepath, data)
 
     key = 'plants'
-    if 'plants' not in data:
+    if 'plants' not in data: data['plants'] = []
+    if data['plants'] == []:
         ## retrieve documents
         query = f'herbs for {ailment_name}?'
         documents, metadatas = retrieve_docs(query)
@@ -361,6 +359,27 @@ for ailment_i, ailment_row in enumerate(ailments_rows[1:]):
         print('***********************')
         data[key] = output_plants
         json_write(f'{jsons_folderpath}/{ailment_slug}.json', data)
+
+    ## constituents (paragraph format)
+    if 'constituents_paragraph' not in data: data['constituents_paragraph'] = []
+    if data['constituents_paragraph'] == []:
+        plants_names = [obj['plant_name_scientific'] for obj in data['plants']][:10]
+        plants_names_str = ', '.join(plants_names)
+        target_words_n = 80
+        prompt = f'''
+            Write a short {target_words_n} words paragraphs on what are the main medicinal constituents in the following PLANTS that help relieve the following ailment:{ailment_name}.
+            PLANTS:
+            {plants_names_str}
+            RULES:
+            Pack as much facts as possible in as few words as possible.
+            Write only the {target_words_n} words paragraph, don't add additional information.
+        '''
+        reply = llm_reply(prompt, model, max_tokens=256)
+        print('******************************************')
+        print(f'{ailment_to_process_index}/{ailment_to_process_num}')
+        print('******************************************')
+        data['constituents_paragraph'] = reply
+        json_write(ailment_filepath, data)
 
     key = 'plants_desc'
     if key not in data:
